@@ -1,0 +1,68 @@
+#!/bin/bash
+
+. ../../xi-sys.cfg
+
+pkgname=nrpe-3.2.1
+libssldir=""
+
+echo "NRPE"
+
+# Set the SSL LIB dir for Ubunut/Debian
+if [ "$distro" == "Debian" ] || [ "$distro" == "Ubuntu" ]; then
+    if [ "$arch" == "x86_64" ]; then
+        libssldir="--with-ssl-lib=/usr/lib/x86_64-linux-gnu/"
+    else
+        libssldir="--with-ssl-lib=/usr/lib/i386-linux-gnu/"
+    fi
+fi
+
+# Set the SSL Lib dir for Raspbian
+if [ "$distro" == "Raspbian" ]; then
+    libssldir="--with-ssl-lib=/usr/lib/arm-linux-gnueabihf"
+fi
+
+# Delete the old archive
+rm -rf $pkgname
+
+# Extract archive
+tar xzf $pkgname.tar.gz
+
+# Save old config file
+if [ -f /usr/local/nagios/etc/nrpe.cfg ]; then
+    mv /usr/local/nagios/etc/nrpe.cfg /usr/local/nagios/etc/nrpe.cfg.save
+fi
+
+# Get the install mode
+EXTRACFG=""
+if [ "$MODE" = "xinetd" ]; then
+    INSTALLMODE='install-inetd'
+else
+    INSTALLMODE='install-init'
+    if [ "$dist" == "el6" ] || [ "$dist" == "oracle6" ]; then
+        EXTRACFG="--with-init-type=sysv"
+    fi
+fi
+
+# Make and install 
+(
+    cd $pkgname
+
+    # Apply patches
+    patch -p1 < ../patches/syslog-option.patch
+
+    ./configure --enable-command-args --with-piddir=/var/run/nrpe --libexecdir=/usr/local/nagios/libexec $libssldir $EXTRACFG
+    make all
+    make install install-config $INSTALLMODE
+)
+
+# Restart xinetd
+if [ "$MODE" = "xinetd" ]; then
+    if [ ! `command -v systemctl` ];then
+        service xinetd restart
+    else
+        systemctl restart xinetd.service
+    fi
+fi
+
+# Post-install modifications
+./post-install

@@ -1,0 +1,89 @@
+---
+
+- hosts: dynamic_group
+  vars:
+    - CATALINA_HOME: "/opt/tomcat_9"
+    - JAVA_HOME: "usr/lib/jvm/java-8-oracle"
+    - JRE_HOME: "/usr/lib/jvm/java-8-oracle/jre"
+    - export_CATALINA_HOME: "export CATALINA_HOME=\"/opt/tomcat_9\""
+    - export_JAVA_HOME: "export JAVA_HOME=\"usr/lib/jvm/java-8-oracle\""
+    - export_JRE_HOME: "export JRE_HOME=\"/usr/lib/jvm/java-8-oracle/jre\""
+    - tomcat_url: http://mirrors.estointernet.in/apache/tomcat/tomcat-9/v9.0.31/bin/apache-tomcat-9.0.31.tar.gz
+
+  tasks:
+     - name: Download key for oracle java 8
+       shell: sudo add-apt-repository -y ppa:webupd9team/java; echo debconf shared/accepted-oracle-license-v1-1 select true | sudo debconf-set-selections; echo debconf shared/accepted-oracle-license-v1-1 seen true | sudo debconf-set-selections
+
+     - name: updating apt-get cache
+       apt:
+          update_cache: yes
+
+     - name: Install the required packages
+       apt:
+          name: "{{ item }}"
+          state: present
+       with_items:
+          - openjdk-8-jre-headless
+
+     - name: updating apt-get cache again
+       apt:
+          update_cache: yes
+
+
+     - name: Check if tomcat is already installed
+       stat:
+          path: /opt/apache-tomcat-9.0.30.tar.gz
+       register: result
+
+     - name: Check if tomcat is already installed
+       stat:
+          path: /opt/tomcat_9
+       register: result
+
+     - name: creating tomcat_9 folder
+       file:
+          path: /opt/tomcat_9
+          state: directory
+       when: result.stat.isdir is defined and result.stat.isdir
+
+
+     - name: Install Tomcat 9
+       shell: cd /opt;  wget {{ tomcat_url }}; tar -xzvf apache-tomcat-9.0.31.tar.gz; mv apache-tomcat-9.0.31 tomcat_9
+       when: result.stat.exists  == false
+
+     - name: creating tomcat_9 folder
+       file:
+          path: /etc/profile.d/java.sh
+          state: touch
+
+
+     - name: to check whether the env var are defines already or not
+       lineinfile:
+         dest: /etc/profile.d/java.sh
+         state: present
+         regexp: "{{ item.check }}"
+         line: "{{ item.add }}"
+       with_items:
+           - { check: '^export CATALINA_HOME=.*', add: "{{ export_CATALINA_HOME }}" }
+           - { check: '^export JAVA_HOME=.*', add: "{{ export_JAVA_HOME }}" }
+           - { check: '^export JRE_HOME=.*', add: "{{ export_JRE_HOME }}" }
+
+
+     - name: copy the war file to the deployment folder
+       copy:
+         src:  "/opt/packages/demo-webapp.war"
+         dest: "/opt/tomcat_9/webapps/"
+       notify:
+          - restart tomcat
+
+  handlers:
+
+
+     - name: restart tomcat
+       shell: nohup sh /opt/tomcat_9/bin/startup.sh
+       register: tomcat
+
+     - name: debugging the message
+       debug:
+         var: tomcat.stdout_lines
+

@@ -1,0 +1,99 @@
+- name: playing playbook for configuring and deploying tomcat on RHEL
+  hosts: dynamic_group
+  vars:
+    req_tomcat_version: 9.0.26
+    tomcat_url: http://mirrors.estointernet.in/apache/tomcat/tomcat-9/v9.0.31/bin/apache-tomcat-9.0.31.tar.gz
+  tasks:
+       - name: for updating repos
+         yum:
+            name: "*"
+            state: latest
+         when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+       - name: Check if tomcat is already installed
+         stat:
+            path: /usr/local/apache-tomcat-9.0.30.tar.gz
+         register: result
+
+
+
+       - name: installing required java
+         yum:
+            name: java-11-openjdk*
+            state: present
+         when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+       - name: downloading tomcat package
+         get_url:
+            url: "{{ tomcat_url }}"
+            dest: /usr/local
+         register: download_result
+         ignore_errors: true
+         when: result.stat.exists  == false and ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+
+
+       - name: unarchive the tomcat package
+         unarchive:
+            src: /usr/local/apache-tomcat-9.0.31.tar.gz
+            dest: /usr/local
+            remote_src: yes
+         when: download_result.changed
+
+
+
+       - name: check and restart whether the tomcat is running already or not
+         shell: tomcat_process=`netstat -an | grep 8080 >/dev/null 2>&1; echo $?`; ([ "$tomcat_process" -eq 0 ] && echo "tomcat_is_running";) || echo "tomcat_is_not_running"
+         register: tomcat_process_result
+
+
+       - name: check whether the firewalld is installed or not
+         shell: firewalld_check=`systemctl list-units | grep -i firewalld; echo $?`; ([ "$firewalld_check" -eq 0 ] && echo "installed";) || echo "not_installed"
+         register: firewalld_check_result
+
+       - name: installing firewalld
+         yum:
+            name: firewalld
+            state: present
+         when: firewalld_check_result.stdout == "not_installed"
+
+       - name: opening port 8080
+         firewalld:
+            port: 8080/tcp
+            permanent: yes
+            state: enabled
+         notify:
+            - firewalld reload
+
+
+       - name: check whether the tomcat is running or not
+         shell: nohup sh /usr/local/apache-tomcat-9.0.31/bin/startup.sh
+         when: tomcat_process_result.stdout == "tomcat_is_not_running"
+
+       - name: copy war file
+         copy:
+            src: /opt/packages/demo-webapp.war
+            dest: /usr/local/apache-tomcat-9.0.31/webapps/
+         when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+         notify:
+            - restart tomcat
+
+  handlers:
+
+     - name: restart tomcat
+       shell: nohup sh /usr/local/apache-tomcat-9.0.31/bin/startup.sh
+
+     - name: firewalld reload
+       shell: firewall-cmd --reload
+
+
+
+#     - name: restart tomcat
+#      #      shell: nohup sh /usr/local/apache-tomcat-9.0.30/bin/startup.sh
+#       #      register: tomcat
+#
+#
+#         #   - name: debugging the message
+#            #    debug:
+#                #     var: tomcat.stdout_lines
+#

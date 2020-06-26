@@ -1,0 +1,44 @@
+#!/bin/bash -e
+
+. ./xi-sys.cfg
+
+# Was previous step completed?
+if [ ! -f installed.repos ]; then
+    echo "Repos were not properly updated - run previous script" >&2
+    exit 1
+fi
+
+# Are prereqs already installed?
+if [ -f installed.prereqs ]; then
+    echo "Prereqs already installed - skipping..."
+    exit 0
+fi
+
+# Only install xinetd if xinetd mode is specified
+if [ "$MODE" = "xinetd" ]; then
+    XINETD='xinetd'
+else
+    XINETD=''
+fi
+
+##########################################
+# INSTALL REQUIRED PACKAGES
+##########################################
+
+echo "Installing prerequisites..."
+    if [ "$MODE" = "xinetd" ]; then
+        XINETD='xinetd'
+    else
+        XINETD=''
+    fi
+if [ "$distro" == "CentOS" ] || [ "$distro" == "RedHatEnterpriseServer" ] || [ "$distro" == "Fedora" ] || [ "$distro" == "OracleServer" ] || [ "$distro" == "CloudLinux" ]; then
+    yum -y install autoconf gcc glibc libmcrypt-devel make openssl-devel sudo sysstat bc $XINETD
+elif [ "$distro" == "openSUSE" ] || [ "$distro" == "openSUSE Leap" ] || [ "$distro" == "SUSE LINUX" ] || [ "$distro" == "SUSE" ]; then
+    zypper --non-interactive install autoconf gcc glibc libmcrypt-devel make libopenssl-devel sudo sysstat bc $XINETD
+elif [ "$distro" == "Debian" ] || [ "$distro" == "Ubuntu" ] ; then
+    apt-get update
+    apt-get install autoconf gcc libc6 libmcrypt-dev make libssl-dev sudo sysstat bc gawk dc $XINETD -y
+fi
+
+echo "Prerequisites installed OK"
+touch installed.prereqs

@@ -1,0 +1,16 @@
+---
+# vars file for nrpe_config
+
+
+#####     Required Variables      #####
+## Fill in appropriate values below unless passing from a higher precedence
+#
+## The hostname of the machine you are monitoring. Host names should not have spaces in them.
+add_config_to_nagios_server_host_name: "{{ item }}"
+with_items: "{{ groups['dynamic_group'] }}"
+## The alias or Nagios friendly name to show in Nagios as the computer being monitored
+add_config_to_nagios_server_nagios_friendly_name: "My Important Server"    
+#
+## The fully qualified domain name or IP address of the machine you are adding to be monitored
+add_config_to_nagios_server_server_fqdn: "myserver-to-monitor.com" 
+

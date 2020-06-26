@@ -1,0 +1,10 @@
+ - hosts: dynamic_group
+   tasks:
+
+ - name: PLAY for configuring and deploying tomcat on Ubuntu
+   import_playbook: "/etc/ansible/tomcat_ubuntu.yaml"
+   when: ansible_distribution == 'Ubuntu'
+
+ - name: PLAY for configuring and deploying tomcat on Rhel
+   import_playbook: "/etc/ansible/tomcat_standalone.yaml"
+   when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'

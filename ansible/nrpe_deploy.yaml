@@ -1,0 +1,85 @@
+ - hosts: dynamic_group
+   tasks:
+    - block:
+      - name: Copying the agent folder
+        synchronize: src=/root/linux-nrpe-agent dest=/tmp
+        register: check_linux_nrpe
+
+      - name: check whether the nrpe is installed or not
+        shell: if [ -f /etc/xinetd.d/nrpe ]; then echo "nrpe_installed"; else echo "nrpe_not_installed"; fi
+        register: nrpe_check
+
+
+      - name: Configure NRPE plugins
+        shell:  "cd /tmp/linux-nrpe-agent;./fullinstall -n"
+        register: nrpe_config_check
+        when: nrpe_check.stdout == "nrpe_not_installed"
+
+
+      - name: changing the allowed host line in /usr/local/nagios/etc/nrpe.cfg
+        lineinfile:
+          path: /usr/local/nagios/etc/nrpe.cfg
+          regexp: '.*allowed_hosts.*'
+          line:     allowed_hosts=127.0.0.1,172.31.46.64
+        when: nrpe_config_check.changed
+        notify:
+          - restart xinetd
+
+      - name: changing the allowed host line in /etc/xinetd.d/nrpe
+        lineinfile:
+          path:  /etc/xinetd.d/nrpe
+          regexp: '.*only_from.*'
+          line:       only_from       = 172.31.46.64 127.0.0.1
+        when: nrpe_config_check.changed
+        notify:
+          - restart xinetd
+
+    - name: block for linux  firewall
+      block:
+
+      - name: installing firewalld
+        yum:
+          name: firewalld
+          state: present
+
+      - name: opening port 8080
+        firewalld:
+          port: 8080/tcp
+          permanent: yes
+          state: enabled
+        notify:
+         - firewalld reload
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+    - name: block for ubuntu firewall
+      block:
+       - name: installing ufw in ubuntu
+         apt:
+           name: ufw
+           state: present
+
+       - name: installing ufw in ubuntu
+         apt:
+           name: ufw
+           state: present
+
+       - name: Allow everything and enable UFW
+         ufw:
+           state: enabled
+           policy: allow
+
+       - name: Allow all access to tcp port 80
+         ufw:
+           rule: allow
+           port: '8080'
+           proto: tcp
+      when: ansible_distribution == 'Ubuntu'
+
+   handlers:
+
+    - name: firewalld reload
+      shell: firewall-cmd --reload
+
+    - name: restart xinetd
+      shell: systemctl restart xinetd
+

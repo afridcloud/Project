@@ -1,0 +1,13 @@
+---
+# tasks file for nrpe_config
+
+- name: Push Nagios configuration file onto Nagios Server
+  become: true
+  become_method: sudo
+  template: 
+    src: '../templates/nagios-template.cfg'
+    dest: "/usr/local/nagios/etc/servers/{{ item }}.cfg"
+  with_items:
+    -  "{{ groups['dynamic_group'] }}"
+  notify: reload-nagios
+

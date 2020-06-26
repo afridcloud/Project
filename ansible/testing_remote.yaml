@@ -1,0 +1,24 @@
+---
+- hosts: webserver
+  user: root
+  tasks:
+      - name: check if the system is running
+        local_action: shell system_state=$(ping -c 3 {{ inventory_hostname }} > /dev/null; echo $?); if [[ $system_state == 0 ]]; then echo "system_is_running"; else echo "system_is_not_running"; fi
+        register: system_state
+
+      - name: system up-status
+        action: command echo "all is fine with {{ inventory_hostname }}"
+        register: status
+        when: system_state.stdout == "system_is_running"
+
+      - debug: msg="{{ status.stdout }}"
+
+      - name: to check the ssh status of servers
+        local_action:
+             module: wait_for
+             host: "{{ inventory_hostname }}"
+             port: "22"
+             delay: "10"
+             timeout: "300"
+             state: "started"
+

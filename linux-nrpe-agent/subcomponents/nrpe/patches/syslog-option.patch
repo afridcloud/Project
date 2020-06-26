@@ -1,0 +1,116 @@
+diff --git a/include/utils.h b/include/utils.h
+index 75ebc0b..7f1625e 100644
+--- a/include/utils.h
++++ b/include/utils.h
+@@ -49,5 +49,6 @@ void open_log_file();
+ void logit(int priority, const char *format, ...);
+ void close_log_file();
+ void display_license(void);
++extern int enable_syslog;
+ 
+ #endif
+diff --git a/sample-config/nrpe.cfg.in b/sample-config/nrpe.cfg.in
+index 1d503c9..4f41987 100644
+--- a/sample-config/nrpe.cfg.in
++++ b/sample-config/nrpe.cfg.in
+@@ -270,7 +270,9 @@ connection_timeout=300
+ 
+ # nasty_metachars="|`&><'\\[]{};\r\n"
+ 
+-
++# This option allows you to enable or disable logging error messages to the syslog facilities.
++# If this option is not set, the error messages will not be logged.
++enable_syslog=0
+ 
+ # COMMAND DEFINITIONS
+ # Command definitions that this daemon will run.  Definitions
+diff --git a/src/nrpe.c b/src/nrpe.c
+index 8e92764..d7d48fc 100644
+--- a/src/nrpe.c
++++ b/src/nrpe.c
+@@ -160,6 +160,8 @@ static void my_disconnect_sighandler(int sig);
+ static void complete_SSL_shutdown(SSL *);
+ #endif
+ 
++int enable_syslog = FALSE;
++
+ int main(int argc, char **argv)
+ {
+	int       result = OK;
+@@ -881,6 +883,9 @@ int read_config_file(char *filename)
+		else if (!strcmp(varname, "dont_blame_nrpe"))
+			allow_arguments = (atoi(varvalue) == 1) ? TRUE : FALSE;
+ 
++		else if (!strcmp(varname, "enable_syslog"))
++			enable_syslog = (atoi(varvalue) == 1) ? TRUE : FALSE;
++
+		else if (!strcmp(varname, "allow_bash_command_substitution"))
+			allow_bash_cmd_subst = (atoi(varvalue) == 1) ? TRUE : FALSE;
+ 
+diff --git a/src/utils.c b/src/utils.c
+index a5aa519..c14eab3 100644
+--- a/src/utils.c
++++ b/src/utils.c
+@@ -58,6 +58,7 @@ char *log_file = NULL;
+ FILE *log_fp = NULL;
+ 
+ static int my_create_socket(struct addrinfo *ai, const char *bind_address, int redirect_stderr);
++extern int enable_debug;
+ 
+ 
+ /* build the crc table - must be called before calculating the crc value */
+@@ -549,8 +550,10 @@ void logit(int priority, const char *for
+ 			fprintf(log_fp, "[%llu] %s\n", (unsigned long long)log_time, buffer);
+ 			fflush(log_fp);
+ 
+-		} else
+-			syslog(priority, "%s", buffer);
++		} else {
++			if ( enable_syslog )
++				syslog(priority, "%s", buffer);
++		}
+ 
+ 		free(buffer);
+ 	}
+diff --git a/src/check_nrpe.c b/src/check_nrpe.c
+index ace7041..23b480f 100644
+--- a/src/check_nrpe.c
++++ b/src/check_nrpe.c
+@@ -129,6 +129,8 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx);
+ #endif
+ void alarm_handler(int);
+ int graceful_close(int, int);
++int enable_syslog = TRUE;
++
+ 
+ int main(int argc, char **argv)
+ {
+@@ -250,7 +252,7 @@ int process_arguments(int argc, char **argv, int from_config_file)
+ 		return ERROR;
+ 
+ 	optind = 0;
+-	snprintf(optchars, MAX_INPUT_BUFFER, "H:f:b:c:a:t:p:S:L:C:K:A:d:s:P:g:246hlnuVE");
++	snprintf(optchars, MAX_INPUT_BUFFER, "H:f:b:c:a:t:p:S:L:C:K:A:d:s:P:g:246hlnuVED");
+ 
+ 	while (1) {
+ 		if (argindex > 0)
+@@ -485,6 +487,11 @@ int process_arguments(int argc, char **argv, int from_config_file)
+ 			open_log_file();
+ 			break;
+ 
++		case 'D':
++			enable_syslog = FALSE;
++			break;
++
++
+ 		default:
+ 			return ERROR;
+ 		}
+@@ -740,6 +747,7 @@ void usage(int result)
+ 		printf(" -a, --args=LIST              Optional arguments that should be passed to the command,\n");
+ 		printf("                              separated by a space. If provided, this must be the last\n");
+ 		printf("                              option supplied on the command line.\n");
++		printf(" -D 	                      Disable syslog logged messages.\n");
+ 		printf("\n");
+ 		printf(" NEW TIMEOUT SYNTAX\n");
+ 		printf(" -t, --timeout=INTERVAL:STATE\n");

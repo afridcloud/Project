@@ -1,0 +1,4 @@
+  - name: configuring apache web server
+    hosts: nagios_server
+    roles:
+        - nrpe_config

@@ -1,0 +1,56 @@
+
+---
+ - hosts: all
+   tasks:
+
+      - name: verify httpd & databse app whether it is running or not
+        shell: if ps  -eaf | egrep 'apache|http' > /dev/null; then echo "process_running"; else "process_not_running"; fi
+        ignore_errors: true
+        register: app_process_check
+
+
+      - name: decission point to start patching
+        fail: msg="{{ inventory_hostname }} having applivcation running, please stop the appplication and continue"
+        when: app_process_check.stdout == "process_running"
+
+
+      - name: upgrading all packages in the server
+        yum:
+            name: "*"
+            state: "latest"
+        when: app_process_check.stdout == "process_not_running" and ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+        register: yum_update
+
+
+      - name: check if the reboot required after the kernal update.
+        shell: KERNAL_NEW=$(rpm -q --last kernel | awk '{print $1}' | head -n 1 | sed 's/kernel-//'); KERNEL_NOW=$(uname -r); if [[ $KERNAL_NEW != $KERNEL_NOW ]]; then echo "reboot_needed"; else echo "reboot_not_needed"; fi
+        ignore_errors: true
+        register: reboot_selection
+
+
+
+      - name: restarting the system
+        command: shutdown -r +1 "Rebooting the system after patching"
+        async: 0
+        poll: 0
+        when: reboot_selection.stdout == "reboot_needed"
+        register: reboot_started
+        ignore_errors: true
+
+
+      - name: pause for 300 seconds
+        pause:
+            minutes: 5
+
+
+      - name: check if the system is running
+        local_action: shell system_state=$(ping -c 1 {{ inventory_hostname }} &> /dev/null ;echo $?); if [[ $SYSTEM_STATE == 0 ]]; then echo "system_is_running"; else echo "system_is_not_running"; fi
+        register: system_state
+        when: reboot_started|changed
+
+
+      - name: check if the system is running
+        local_action: command echo "all is fine with {{ inventory_hostname }}"
+        when: system_state.stdout == "system_is_running"
+
+      - debug: msg="{{ status.stdout }}"
